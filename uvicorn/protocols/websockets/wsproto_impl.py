@@ -244,7 +244,10 @@ class WSProtocol(asyncio.Protocol):
                 self.transport.write(output)
 
             elif message_type == "websocket.close":
-                self.queue.put_nowait({"type": "websocket.disconnect", "code": None})
+                self.queue.put_nowait({
+                    "type": "websocket.disconnect",
+                    "code": message.get("code", 1006)
+                })
                 self.logger.info(
                     '%s - "WebSocket %s" 403',
                     self.scope["client"],
@@ -252,10 +255,7 @@ class WSProtocol(asyncio.Protocol):
                 )
                 self.handshake_complete = True
                 self.close_sent = True
-                msg = h11.Response(status_code=403, headers=[])
-                output = self.conn.send(msg)
-                msg = h11.EndOfMessage()
-                output += self.conn.send(msg)
+                output = self.conn.send(wsproto.events.RejectConnection())
                 self.transport.write(output)
                 self.transport.close()
 

@@ -45,6 +45,7 @@ class WebSocketProtocol(websockets.WebSocketServerProtocol):
         self.closed_event = asyncio.Event()
         self.initial_response = None
         self.connect_sent = False
+        self.rejected_code = None
         self.accepted_subprotocol = None
 
         server = Server()
@@ -189,6 +190,7 @@ class WebSocketProtocol(websockets.WebSocketServerProtocol):
                 self.initial_response = (http.HTTPStatus.FORBIDDEN, [], b"")
                 self.handshake_started_event.set()
                 self.closed_event.set()
+                self.rejected_code = message.get("code", 1006)
 
             else:
                 msg = "Expected ASGI message 'websocket.accept' or 'websocket.close', but got '%s'."
@@ -222,6 +224,11 @@ class WebSocketProtocol(websockets.WebSocketServerProtocol):
             return {"type": "websocket.connect"}
 
         await self.handshake_completed_event.wait()
+
+        if self.handshake_started_event.is_set() \
+                and self.closed_event.is_set():
+            return {"type": "websocket.disconnect", "code": self.rejected_code}
+
         try:
             data = await self.recv()
         except websockets.ConnectionClosed as exc:
